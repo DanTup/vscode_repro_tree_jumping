@@ -3,7 +3,12 @@ import * as vscode from 'vscode';
 export class TestView {
 
 	constructor(context: vscode.ExtensionContext) {
-		const view = vscode.window.createTreeView('testView', { treeDataProvider: aNodeWithIdTreeDataProvider(), showCollapseAll: true });
+		const prov = new DataProvider();
+		const view = vscode.window.createTreeView('testView', { treeDataProvider: prov, showCollapseAll: true });
+		view.onDidChangeSelection((e) => {
+			if (e.selection && e.selection.length === 1)
+				prov.onDidChangeTreeDataEmitter.fire(e.selection[0]);
+		});
 		vscode.commands.registerCommand('testView.reveal', async () => {
 			const key = await vscode.window.showInputBox({ placeHolder: 'Type the label of the item to reveal' });
 			if (key) {
@@ -13,43 +18,27 @@ export class TestView {
 	}
 }
 
-const tree = {
-	'a': {
-		'aa': {
-			'aaa': {
-				'aaaa': {
-					'aaaaa': {
-						'aaaaaa': {
-
-						}
-					}
-				}
-			}
-		},
-		'ab': {}
-	},
-	'b': {
-		'ba': {},
-		'bb': {}
-	}
-};
+const tree = {};
+for (let i = 0; i < 1000; i++)
+	tree[`node${i}`] = {};
 let nodes = {};
 
-function aNodeWithIdTreeDataProvider(): vscode.TreeDataProvider<{ key: string }> {
-	return {
-		getChildren: (element: { key: string }): { key: string }[] => {
-			return getChildren(element ? element.key : undefined).map(key => getNode(key));
-		},
-		getTreeItem: (element: { key: string }): vscode.TreeItem => {
-			const treeItem = getTreeItem(element.key);
-			treeItem.id = element.key;
-			return treeItem;
-		},
-		getParent: ({ key }: { key: string }): { key: string } => {
-			const parentKey = key.substring(0, key.length - 1);
-			return parentKey ? new Key(parentKey) : void 0;
-		}
-	};
+class DataProvider implements vscode.TreeDataProvider<{ key: string }> {
+	public onDidChangeTreeDataEmitter: vscode.EventEmitter<{ key: string }> = new vscode.EventEmitter<{ key: string }>();
+	public readonly onDidChangeTreeData: vscode.Event<{ key: string }> = this.onDidChangeTreeDataEmitter.event;
+
+	public getChildren(element: { key: string }): { key: string }[] {
+		return getChildren(element ? element.key : undefined).map(key => getNode(key));
+	}
+	public getTreeItem(element: { key: string }): vscode.TreeItem {
+		const treeItem = getTreeItem(element.key);
+		treeItem.id = element.key;
+		return treeItem;
+	}
+	public getParent({ key }: { key: string }): { key: string } {
+		const parentKey = key.substring(0, key.length - 1);
+		return parentKey ? new Key(parentKey) : void 0;
+	}
 }
 
 function getChildren(key: string): string[] {
@@ -63,12 +52,12 @@ function getChildren(key: string): string[] {
 	return [];
 }
 
-function getTreeItem(key: string): vscode.TreeItem2 {
+function getTreeItem(key: string): vscode.TreeItem {
 	const treeElement = getTreeElement(key);
 	return {
-		label: <vscode.TreeItemLabel>{ label: key, highlights: key.length > 1 ? [[key.length - 2, key.length - 1]] : void 0},
+		label: key,
 		tooltip: `Tooltip for ${key}`,
-		collapsibleState: treeElement && Object.keys(treeElement).length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+		collapsibleState: treeElement && Object.keys(treeElement).length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
 	};
 }
 
